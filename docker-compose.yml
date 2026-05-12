@@ -12,3 +12,27 @@ services:
     restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/backend/uploads
+    depends_on:
+      - neo4j
+
+  # 本地 Graphiti 记忆存储（替代 Zep Cloud）
+  # 仅在 MEMORY_BACKEND=graphiti 时需要
+  neo4j:
+    image: neo4j:5-community
+    container_name: mirofish-neo4j
+    ports:
+      - "7474:7474"   # HTTP / 浏览器 UI
+      - "7687:7687"   # Bolt（驱动连接）
+    environment:
+      # 密码需与 .env 中的 NEO4J_PASSWORD 保持一致
+      NEO4J_AUTH: "neo4j/mirofish-neo4j"
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: unless-stopped
+
+volumes:
+  neo4j_data:
+  neo4j_logs:

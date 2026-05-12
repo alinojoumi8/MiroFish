@@ -15,8 +15,12 @@ dependencies = [
     
     # LLM 相关
     "openai>=1.0.0",
-    
-    # Zep Cloud
+
+    # 记忆后端
+    # 本地优先：Graphiti + Neo4j（默认）。zep-cloud 保留作兜底
+    "graphiti-core>=0.3",
+    "neo4j>=5.20",
+    "sentence-transformers>=3.0",
     "zep-cloud==3.13.0",
     
     # OASIS 社交媒体模拟

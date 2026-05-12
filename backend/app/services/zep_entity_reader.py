@@ -7,11 +7,10 @@ import time
 from typing import Dict, Any, List, Optional, Set, Callable, TypeVar
 from dataclasses import dataclass, field
 
-from zep_cloud.client import Zep
-
 from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
+from .memory import get_memory_backend
 
 logger = get_logger('mirofish.zep_entity_reader')
 
@@ -79,11 +78,9 @@ class ZepEntityReader:
     """
     
     def __init__(self, api_key: Optional[str] = None):
+        # api_key 保留作兼容（旧调用方）。Memory 后端会自行处理凭据。
         self.api_key = api_key or Config.ZEP_API_KEY
-        if not self.api_key:
-            raise ValueError("ZEP_API_KEY 未配置")
-        
-        self.client = Zep(api_key=self.api_key)
+        self.memory = get_memory_backend()
     
     def _call_with_retry(
         self, 
@@ -136,12 +133,12 @@ class ZepEntityReader:
         """
         logger.info(f"获取图谱 {graph_id} 的所有节点...")
 
-        nodes = fetch_all_nodes(self.client, graph_id)
+        nodes = fetch_all_nodes(self.memory, graph_id)
 
         nodes_data = []
         for node in nodes:
             nodes_data.append({
-                "uuid": getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
+                "uuid": node.uuid,
                 "name": node.name or "",
                 "labels": node.labels or [],
                 "summary": node.summary or "",
@@ -163,12 +160,12 @@ class ZepEntityReader:
         """
         logger.info(f"获取图谱 {graph_id} 的所有边...")
 
-        edges = fetch_all_edges(self.client, graph_id)
+        edges = fetch_all_edges(self.memory, graph_id)
 
         edges_data = []
         for edge in edges:
             edges_data.append({
-                "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
+                "uuid": edge.uuid,
                 "name": edge.name or "",
                 "fact": edge.fact or "",
                 "source_node_uuid": edge.source_node_uuid,
@@ -190,16 +187,16 @@ class ZepEntityReader:
             边列表
         """
         try:
-            # 使用重试机制调用Zep API
+            # 使用重试机制调用后端 API
             edges = self._call_with_retry(
-                func=lambda: self.client.graph.node.get_entity_edges(node_uuid=node_uuid),
+                func=lambda: self.memory.get_entity_edges(node_uuid),
                 operation_name=f"获取节点边(node={node_uuid[:8]}...)"
             )
-            
+
             edges_data = []
             for edge in edges:
                 edges_data.append({
-                    "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
+                    "uuid": edge.uuid,
                     "name": edge.name or "",
                     "fact": edge.fact or "",
                     "source_node_uuid": edge.source_node_uuid,
@@ -348,10 +345,10 @@ class ZepEntityReader:
         try:
             # 使用重试机制获取节点
             node = self._call_with_retry(
-                func=lambda: self.client.graph.node.get(uuid_=entity_uuid),
+                func=lambda: self.memory.get_node(entity_uuid),
                 operation_name=f"获取节点详情(uuid={entity_uuid[:8]}...)"
             )
-            
+
             if not node:
                 return None
             
@@ -397,7 +394,7 @@ class ZepEntityReader:
                     })
             
             return EntityNode(
-                uuid=getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
+                uuid=node.uuid,
                 name=node.name or "",
                 labels=node.labels or [],
                 summary=node.summary or "",

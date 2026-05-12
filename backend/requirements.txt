@@ -13,7 +13,13 @@ flask-cors>=6.0.0
 # OpenAI SDK（统一使用 OpenAI 格式调用 LLM）
 openai>=1.0.0
 
-# ============= Zep Cloud =============
+# ============= 记忆后端 =============
+# 默认本地：Graphiti + Neo4j（替代 Zep Cloud）
+graphiti-core>=0.3
+neo4j>=5.20
+# 本地嵌入与重排序模型（默认 BAAI/bge-* 系列）
+sentence-transformers>=3.0
+# Zep Cloud 兜底（MEMORY_BACKEND=zep 时启用）
 zep-cloud==3.13.0
 
 # ============= OASIS 社交媒体模拟 =============
