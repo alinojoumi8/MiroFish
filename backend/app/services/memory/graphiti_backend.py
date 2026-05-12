@@ -72,12 +72,16 @@ def _build_local_embedder():
 
         async def create(self, input_data):  # type: ignore[override]
             if isinstance(input_data, list):
+                if not input_data:
+                    return []
                 vecs = self._model.encode(input_data, normalize_embeddings=True)
                 return [v.tolist() for v in vecs]
             vec = self._model.encode([input_data], normalize_embeddings=True)[0]
             return vec.tolist()
 
         async def create_batch(self, input_data_list):  # type: ignore[override]
+            if not input_data_list:
+                return []
             vecs = self._model.encode(input_data_list, normalize_embeddings=True)
             return [v.tolist() for v in vecs]
 
@@ -111,19 +115,205 @@ def _build_local_reranker():
 def _build_graphiti_llm():
     """
     Graphiti 期待 graphiti_core.llm_client.LLMClient 接口。
-    我们用 openai SDK 直连用户激活 provider 的端点（与 LLMClient 走同一套配置）。
+
+    为什么不用默认的 OpenAIClient？
+      OpenAIClient 走 `beta.chat.completions.parse()`（OpenAI 严格 structured-output），
+      要求响应是纯 JSON，对非 OpenAI 兼容端点（MiniMax M2 / Kimi K2.6 等）会炸。
+      改用 OpenAIGenericClient：plain chat completions + JSON mode，更兼容。
+
+    为什么还要再 subclass？
+      MiniMax M2 / Kimi K2.6 等会在 JSON 前后包 `<think>...</think>` 推理段或 markdown
+      代码栅栏 (```json ... ```)。Generic 客户端直接 json.loads() 会抛错。
+      下面的 _ThinkStrippingClient 在 json.loads 之前把这些噪声清掉。
     """
-    from graphiti_core.llm_client import LLMConfig, OpenAIClient  # type: ignore
+    import json
+    import re
+
+    from graphiti_core.llm_client import LLMConfig  # type: ignore
+    from graphiti_core.llm_client.openai_generic_client import (  # type: ignore
+        OpenAIGenericClient,
+    )
 
     from ...utils import llm_providers
 
+    _THINK_RE = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
+    _FENCE_OPEN_RE = re.compile(r"^\s*```(?:json)?\s*\n?", re.IGNORECASE)
+    _FENCE_CLOSE_RE = re.compile(r"\n?```\s*$")
+
+    def _clean_json_text(raw: str) -> str:
+        if not raw:
+            return raw
+        s = _THINK_RE.sub("", raw).strip()
+        s = _FENCE_OPEN_RE.sub("", s)
+        s = _FENCE_CLOSE_RE.sub("", s)
+        return s.strip()
+
+    def _schema_to_example(schema: dict, defs: dict | None = None) -> Any:
+        """Convert a Pydantic JSON schema to a simple concrete example value.
+
+        MiniMax-M2 and Kimi echo back the raw schema when given it as a format
+        spec. A concrete example value teaches them what shape to produce.
+        """
+        if defs is None:
+            defs = schema.get("$defs", {})
+        if "$ref" in schema:
+            ref_name = schema["$ref"].split("/")[-1]
+            return _schema_to_example(defs.get(ref_name, {}), defs)
+        typ = schema.get("type")
+        if typ == "object":
+            props = schema.get("properties", {})
+            required = set(schema.get("required", list(props.keys())))
+            return {k: _schema_to_example(v, defs) for k, v in props.items() if k in required}
+        if typ == "array":
+            items = schema.get("items", {})
+            return [_schema_to_example(items, defs)]
+        if typ == "string":
+            desc = schema.get("description", "")
+            return (desc[:30] if desc else "example text")
+        if typ == "integer":
+            return 0
+        if typ == "number":
+            return 0.0
+        if typ == "boolean":
+            return True
+        if "anyOf" in schema:
+            for opt in schema["anyOf"]:
+                if opt.get("type") != "null":
+                    return _schema_to_example(opt, defs)
+        return None
+
+    class _ThinkStrippingClient(OpenAIGenericClient):
+        """OpenAIGenericClient + 输出清洗（剥离 <think> / markdown fence）。
+
+        Two overrides:
+        1. generate_response: replaces the raw Pydantic JSON schema instruction
+           with a concrete example JSON, because MiniMax-M2 / Kimi echo the
+           schema back verbatim instead of filling it with data.
+        2. _generate_response: strips <think> tags and markdown fences from the
+           model output before JSON-parsing, and uses raw_decode to tolerate
+           trailing content after the first valid JSON object.
+        """
+
+        async def generate_response(  # type: ignore[override]
+            self,
+            messages,
+            response_model=None,
+            max_tokens=None,
+            model_size=None,
+        ):
+            from graphiti_core.llm_client.client import MULTILINGUAL_EXTRACTION_RESPONSES  # type: ignore
+            from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS, ModelSize  # type: ignore
+            from graphiti_core.prompts.models import Message as _Msg  # type: ignore
+
+            if max_tokens is None:
+                max_tokens = self.max_tokens
+            if model_size is None:
+                model_size = ModelSize.medium
+
+            if response_model is not None:
+                # Build a concrete example rather than the raw Pydantic schema.
+                # The raw schema (full $defs / $ref / properties tree) confuses
+                # MiniMax-M2 and Kimi: they echo the schema itself as their
+                # "answer" instead of populating it with real data.
+                example = _schema_to_example(response_model.model_json_schema())
+                example_json = json.dumps(example, ensure_ascii=False)
+                messages[-1].content += (
+                    f"\n\nRespond with a JSON object in the following format:\n\n{example_json}"
+                )
+
+            messages[0].content += MULTILINGUAL_EXTRACTION_RESPONSES
+
+            retry_count = 0
+            last_error: Exception | None = None
+            while retry_count <= self.MAX_RETRIES:
+                try:
+                    return await self._generate_response(
+                        messages, response_model, max_tokens, model_size
+                    )
+                except Exception as e:
+                    last_error = e
+                    if retry_count >= self.MAX_RETRIES:
+                        logger.error(
+                            "Max retries (%d) exceeded. Last error: %s", self.MAX_RETRIES, e
+                        )
+                        raise
+                    retry_count += 1
+                    error_ctx = _Msg(
+                        role="user",
+                        content=(
+                            f"The previous response was invalid. "
+                            f"Error: {e.__class__.__name__}: {e}. "
+                            "Please try again with a valid JSON response."
+                        ),
+                    )
+                    messages.append(error_ctx)
+                    logger.warning(
+                        "Retrying after error (attempt %d/%d): %s",
+                        retry_count, self.MAX_RETRIES, e,
+                    )
+            raise last_error or Exception("Max retries exceeded")
+
+        async def _generate_response(self, messages, response_model=None, max_tokens=None, model_size=None):  # type: ignore[override]
+            from graphiti_core.llm_client.config import DEFAULT_MAX_TOKENS, ModelSize  # type: ignore
+            from openai.types.chat import ChatCompletionMessageParam  # type: ignore
+
+            if max_tokens is None:
+                max_tokens = DEFAULT_MAX_TOKENS
+            if model_size is None:
+                model_size = ModelSize.medium
+
+            openai_messages: list[ChatCompletionMessageParam] = []
+            for m in messages:
+                m.content = self._clean_input(m.content)
+                if m.role == "user":
+                    openai_messages.append({"role": "user", "content": m.content})
+                elif m.role == "system":
+                    openai_messages.append({"role": "system", "content": m.content})
+
+            resp = await self.client.chat.completions.create(
+                model=self.model or "gpt-4o-mini",
+                messages=openai_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                response_format={"type": "json_object"},
+            )
+            raw = resp.choices[0].message.content or ""
+            cleaned = _clean_json_text(raw)
+            try:
+                obj, _ = json.JSONDecoder().raw_decode(cleaned)
+                return obj
+            except json.JSONDecodeError:
+                # fallback: extract first {...} block
+                start = cleaned.find("{")
+                end = cleaned.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    return json.loads(cleaned[start : end + 1])
+                logger.error(
+                    "Graphiti LLM 返回的 JSON 无效（清洗后仍失败）。raw[:300]=%r",
+                    raw[:300],
+                )
+                raise
+
+    profile = llm_providers.get_active_provider()
     cfg = LLMConfig(
         api_key=llm_providers.get_active_api_key(),
         base_url=llm_providers.get_active_base_url(),
         model=llm_providers.get_active_model(),
         small_model=llm_providers.get_active_model(),
     )
-    return OpenAIClient(config=cfg)
+
+    # 部分 provider（Kimi For Coding）需要自定义 HTTP header（如 User-Agent）才放行
+    extra_headers = dict(profile.extra_headers)
+    client = None
+    if extra_headers:
+        from openai import AsyncOpenAI  # type: ignore
+        client = AsyncOpenAI(
+            api_key=cfg.api_key,
+            base_url=cfg.base_url,
+            default_headers=extra_headers,
+        )
+
+    return _ThinkStrippingClient(config=cfg, client=client)
 
 
 # ===== Backend 实现 =====
