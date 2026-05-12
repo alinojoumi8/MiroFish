@@ -567,23 +567,33 @@ const initProject = async () => {
 // 处理新建项目 - 调用 ontology/generate API
 const handleNewProject = async () => {
   const pending = getPendingUpload()
-  
-  if (!pending.isPending || pending.files.length === 0) {
-    error.value = '没有待上传的文件，请返回首页重新操作'
+
+  const hasFiles = pending.files && pending.files.length > 0
+  const hasUrls = pending.urls && pending.urls.length > 0
+
+  if (!pending.isPending || (!hasFiles && !hasUrls)) {
+    error.value = '没有待上传的文件或 URL，请返回首页重新操作'
     loading.value = false
     return
   }
-  
+
   try {
     loading.value = true
     currentPhase.value = 0 // 本体生成阶段
-    ontologyProgress.value = { message: '正在上传文件并分析文档...' }
-    
+    ontologyProgress.value = {
+      message: hasUrls
+        ? '正在抓取 URL 内容并分析文档...'
+        : '正在上传文件并分析文档...'
+    }
+
     // 构建 FormData
     const formDataObj = new FormData()
     pending.files.forEach(file => {
       formDataObj.append('files', file)
     })
+    if (hasUrls) {
+      formDataObj.append('urls', pending.urls.join('\n'))
+    }
     formDataObj.append('simulation_requirement', pending.simulationRequirement)
     
     // 调用本体生成 API

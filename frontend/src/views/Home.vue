@@ -168,6 +168,38 @@
               </div>
             </div>
 
+            <!-- URL 输入区 -->
+            <div class="console-section">
+              <div class="console-header">
+                <span class="console-label">{{ $t('home.urlSources') }}</span>
+                <span class="console-meta">{{ $t('home.urlSourcesHint') }}</span>
+              </div>
+              <div class="url-input-row">
+                <input
+                  v-model="urlInput"
+                  type="url"
+                  class="url-input"
+                  :placeholder="$t('home.urlPlaceholder')"
+                  :disabled="loading"
+                  @keydown.enter.prevent="addUrl"
+                />
+                <button
+                  class="url-add-btn"
+                  :disabled="loading || !urlInput.trim()"
+                  @click="addUrl"
+                >
+                  + {{ $t('home.urlAdd') }}
+                </button>
+              </div>
+              <div v-if="urls.length > 0" class="url-list">
+                <div v-for="(u, idx) in urls" :key="idx" class="url-item">
+                  <span class="url-icon">🔗</span>
+                  <span class="url-text" :title="u">{{ u }}</span>
+                  <button @click="removeUrl(idx)" class="remove-btn">×</button>
+                </div>
+              </div>
+            </div>
+
             <!-- 分割线 -->
             <div class="console-divider">
               <span>{{ $t('home.inputParams') }}</span>
@@ -215,11 +247,13 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import HistoryDatabase from '../components/HistoryDatabase.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import LLMProviderSwitcher from '../components/LLMProviderSwitcher.vue'
 
 const router = useRouter()
+const { t } = useI18n()
 
 // 表单数据
 const formData = ref({
@@ -229,6 +263,10 @@ const formData = ref({
 // 文件列表
 const files = ref([])
 
+// URL 列表（与文件并列作为来源；用 Jina Reader 在后端抓取）
+const urls = ref([])
+const urlInput = ref('')
+
 // 状态
 const loading = ref(false)
 const error = ref('')
@@ -237,10 +275,33 @@ const isDragOver = ref(false)
 // 文件输入引用
 const fileInput = ref(null)
 
-// 计算属性:是否可以提交
+// 计算属性:是否可以提交 —— 需要 simulation 描述 + 至少一个来源（文件 或 URL）
 const canSubmit = computed(() => {
-  return formData.value.simulationRequirement.trim() !== '' && files.value.length > 0
+  return formData.value.simulationRequirement.trim() !== ''
+    && (files.value.length > 0 || urls.value.length > 0)
 })
+
+// URL helpers
+const isLikelyUrl = (s) => /^https?:\/\/\S+/i.test((s || '').trim())
+
+const addUrl = () => {
+  const raw = (urlInput.value || '').trim()
+  if (!raw) return
+  // 支持一次贴多个（空格/逗号/换行分隔）
+  const parts = raw.split(/[\s,]+/).map(s => s.trim()).filter(Boolean)
+  for (const p of parts) {
+    if (!isLikelyUrl(p)) {
+      error.value = t('home.urlInvalid', { url: p })
+      continue
+    }
+    if (!urls.value.includes(p)) urls.value.push(p)
+  }
+  urlInput.value = ''
+}
+
+const removeUrl = (idx) => {
+  urls.value.splice(idx, 1)
+}
 
 // 触发文件选择
 const triggerFileInput = () => {
@@ -299,11 +360,15 @@ const scrollToBottom = () => {
 // 开始模拟 - 立即跳转，API调用在Process页面进行
 const startSimulation = () => {
   if (!canSubmit.value || loading.value) return
-  
+
   // 存储待上传的数据
   import('../store/pendingUpload.js').then(({ setPendingUpload }) => {
-    setPendingUpload(files.value, formData.value.simulationRequirement)
-    
+    setPendingUpload(
+      files.value,
+      formData.value.simulationRequirement,
+      [...urls.value]
+    )
+
     // 立即跳转到Process页面（使用特殊标识表示新建项目）
     router.push({
       name: 'Process',
@@ -895,6 +960,88 @@ const startSimulation = () => {
     max-width: 200px;
     margin-bottom: 20px;
   }
+}
+
+/* ===== URL Source Input ===== */
+.url-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.url-input {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: #FAFAFA;
+  color: #222;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.url-input:focus {
+  border-color: var(--orange);
+  background: #FFF;
+}
+
+.url-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.url-add-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 8px 12px;
+  background: var(--black);
+  color: var(--white);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.url-add-btn:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
+.url-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.url-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.url-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #F5F5F5;
+  border: 1px solid #EEE;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.url-icon {
+  flex-shrink: 0;
+}
+
+.url-text {
+  flex: 1;
+  font-family: var(--font-mono);
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 </style>
 

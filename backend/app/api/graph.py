@@ -16,6 +16,7 @@ from ..services.text_processor import TextProcessor
 from ..utils.file_parser import FileParser
 from ..utils.logger import get_logger
 from ..utils.locale import t, get_locale, set_locale
+from ..utils.url_fetcher import fetch_urls, parse_url_list
 from ..models.task import TaskManager, TaskStatus
 from ..models.project import ProjectManager, ProjectStatus
 
@@ -164,42 +165,70 @@ def generate_ontology():
                 "error": t('api.requireSimulationRequirement')
             }), 400
         
-        # 获取上传的文件
+        # 获取上传的文件 + URL 列表（任一非空即可）
         uploaded_files = request.files.getlist('files')
-        if not uploaded_files or all(not f.filename for f in uploaded_files):
+        has_files = bool(uploaded_files) and any(f.filename for f in uploaded_files)
+        urls_raw = request.form.get('urls', '') or ''
+        url_list = parse_url_list(urls_raw)
+        has_urls = bool(url_list)
+
+        if not has_files and not has_urls:
             return jsonify({
                 "success": False,
                 "error": t('api.requireFileUpload')
             }), 400
-        
+
         # 创建项目
         project = ProjectManager.create_project(name=project_name)
         project.simulation_requirement = simulation_requirement
         logger.info(f"创建项目: {project.project_id}")
-        
+
         # 保存文件并提取文本
         document_texts = []
         all_text = ""
-        
+
         for file in uploaded_files:
             if file and file.filename and allowed_file(file.filename):
                 # 保存文件到项目目录
                 file_info = ProjectManager.save_file_to_project(
-                    project.project_id, 
-                    file, 
+                    project.project_id,
+                    file,
                     file.filename
                 )
                 project.files.append({
                     "filename": file_info["original_filename"],
                     "size": file_info["size"]
                 })
-                
+
                 # 提取文本
                 text = FileParser.extract_text(file_info["path"])
                 text = TextProcessor.preprocess_text(text)
                 document_texts.append(text)
                 all_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"
-        
+
+        # 通过 Jina Reader 抓取 URL，作为额外的文档源
+        if has_urls:
+            logger.info(f"抓取 {len(url_list)} 个 URL via Jina Reader: {url_list}")
+            try:
+                docs = fetch_urls(url_list)
+            except Exception as e:
+                logger.error(f"URL 抓取失败: {e}")
+                ProjectManager.delete_project(project.project_id)
+                return jsonify({
+                    "success": False,
+                    "error": f"URL fetch failed: {e}"
+                }), 502
+            for doc in docs:
+                text = TextProcessor.preprocess_text(doc.text)
+                document_texts.append(text)
+                source_label = doc.display_name or doc.url
+                all_text += f"\n\n=== {source_label} ({doc.url}) ===\n{text}"
+                project.files.append({
+                    "filename": source_label,
+                    "size": len(doc.text),
+                    "source_url": doc.url,
+                })
+
         if not document_texts:
             ProjectManager.delete_project(project.project_id)
             return jsonify({
