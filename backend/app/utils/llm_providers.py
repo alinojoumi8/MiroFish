@@ -25,6 +25,10 @@ class ProviderProfile:
     default_model: str
     api_key_env: str
     label: str
+    # 部分 provider 要求客户端通过特定 User-Agent / 自定义 header 接入
+    # （例如 Kimi For Coding 仅允许 Coding Agent 客户端访问）。
+    # 使用 frozenset[tuple] 以保持 dataclass 的 frozen 不变性。
+    extra_headers: tuple = ()
 
 
 PROVIDERS: Dict[str, ProviderProfile] = {
@@ -37,10 +41,15 @@ PROVIDERS: Dict[str, ProviderProfile] = {
     ),
     "kimi": ProviderProfile(
         name="kimi",
-        base_url="https://api.moonshot.ai/v1",
-        default_model="kimi-k2-thinking",
+        # Kimi For Coding（Coding Plan）专用端点 —— 与 platform.moonshot.ai 不同。
+        base_url="https://api.kimi.com/coding/v1",
+        # 稳定模型 ID：自动指向最新版（当前 K2.6）
+        default_model="kimi-for-coding",
         api_key_env="KIMI_API_KEY",
-        label="Kimi K2 Thinking",
+        label="Kimi K2.6 (For Coding)",
+        # Coding Plan 仅授权给特定 Coding Agent 客户端（Claude Code / Kimi CLI / Roo Code 等）。
+        # 用户授权下，MiroFish 以这些客户端的身份标识发起请求。
+        extra_headers=(("User-Agent", "claude-cli/1.0.0"),),
     ),
     "custom": ProviderProfile(
         name="custom",
@@ -126,6 +135,11 @@ def get_active_base_url() -> str:
 def get_active_api_key() -> str:
     profile = get_active_provider()
     return os.environ.get(profile.api_key_env, "")
+
+
+def get_active_extra_headers() -> Dict[str, str]:
+    """返回当前激活 provider 需要附加的 HTTP header（如 User-Agent）。"""
+    return dict(get_active_provider().extra_headers)
 
 
 def set_active_provider(name: str, model_override: Optional[str] = None) -> ProviderProfile:

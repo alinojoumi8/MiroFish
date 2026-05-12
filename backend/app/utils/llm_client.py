@@ -34,11 +34,13 @@ class LLMClient:
                 profile.default_model if profile.name != "custom" else self._resolve_env("LLM_MODEL_NAME", "gpt-4o-mini")
             )
             self.provider_name = profile.name
+            self.extra_headers = dict(profile.extra_headers)
         else:
             self.api_key = api_key or llm_providers.get_active_api_key()
             self.base_url = base_url or llm_providers.get_active_base_url()
             self.model = model or llm_providers.get_active_model()
             self.provider_name = llm_providers.get_active_provider().name
+            self.extra_headers = llm_providers.get_active_extra_headers()
 
         if not self.api_key:
             raise ValueError(
@@ -46,7 +48,10 @@ class LLMClient:
                 f"请在 .env 中设置对应的 API key。"
             )
 
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        client_kwargs = {"api_key": self.api_key, "base_url": self.base_url}
+        if self.extra_headers:
+            client_kwargs["default_headers"] = self.extra_headers
+        self.client = OpenAI(**client_kwargs)
 
     @staticmethod
     def _resolve_env(name: str, default: str = "") -> str:
