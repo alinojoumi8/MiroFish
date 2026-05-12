@@ -56,5 +56,8 @@ backend/logs/
 # 上传文件
 backend/uploads/
 
+# 后端运行时本地状态（LLM provider 选择持久化、临时数据等）
+backend/app/uploads/
+
 # Docker 数据
 data/

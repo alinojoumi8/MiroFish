@@ -2,8 +2,11 @@ import axios from 'axios'
 import i18n from '../i18n'
 
 // 创建axios实例
+// 默认使用相对路径 (''），让请求落在当前页面 origin，由 Vite dev server 的 /api 代理转发到后端。
+// 这样无论是 host 上的 `npm run dev` 还是 Docker 内部署，都不会出现 CORS / 端口不匹配的问题。
+// 如果想覆盖（例如前后端分离部署到不同域名），通过 VITE_API_BASE_URL 设置完整 URL。
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
   timeout: 300000, // 5分钟超时（本体生成可能需要较长时间）
   headers: {
     'Content-Type': 'application/json'

@@ -3,21 +3,38 @@
 .gitignore
 .cursor
 .DS_Store
-.env
 
+# Secrets — passed in via docker-compose env_file at runtime, never baked into the image
+.env
+.env.local
+.env.*.local
+
+# Dependency caches
 node_modules
 frontend/node_modules
 backend/.venv
 .venv
 .python-version
 
+# Python caches
 __pycache__
 *.pyc
 .pytest_cache
 .mypy_cache
 .ruff_cache
 
+# Build artifacts
 frontend/dist
 frontend/.vite
 
+# Local data / state (mounted as volumes at runtime, no need to ship in image)
 backend/uploads
+backend/app/uploads/.llm_provider_state.json
+
+# Editor / IDE
+.idea
+.vscode
+
+# Misc
+*.log
+.claude

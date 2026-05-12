@@ -1,38 +1,56 @@
 services:
   mirofish:
-    image: ghcr.io/666ghj/mirofish:latest
-    # 加速镜像（如拉取缓慢可替换上方地址）
-    # image: ghcr.nju.edu.cn/666ghj/mirofish:latest
-    container_name: mirofish
+    # 从本仓库的 Dockerfile 构建（包含 LLM provider 切换 + 本地 Graphiti 记忆）
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mirofish-local:dev
+    container_name: mirofish-app                # 唯一名称，避免与其它项目冲突
     env_file:
       - .env
+    # 容器内必须通过 compose service name 连接 Neo4j，而非 .env 中的 localhost
+    environment:
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_PASSWORD: "mirofish"
     ports:
-      - "3000:3000"
-      - "5001:5001"
+      # 主机 3010 → 容器内 Vite dev server (3000)。避开 SEO/MiroFish-Offline 占用的 3000
+      # 后端 5001 不再暴露到主机 —— Vite dev server 内部已将 /api 反向代理到 localhost:5001
+      - "3010:3000"
     restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/backend/uploads
+      # 持久化 HuggingFace 缓存，避免每次重启重新下载 BGE 模型 (~400MB)
+      - hf_cache:/root/.cache/huggingface
     depends_on:
-      - neo4j
+      neo4j:
+        condition: service_healthy
 
   # 本地 Graphiti 记忆存储（替代 Zep Cloud）
   # 仅在 MEMORY_BACKEND=graphiti 时需要
   neo4j:
     image: neo4j:5-community
-    container_name: mirofish-neo4j
+    container_name: mirofish-app-neo4j          # 唯一名称
     ports:
-      - "7474:7474"   # HTTP / 浏览器 UI
-      - "7687:7687"   # Bolt（驱动连接）
+      # 主机端口已避开 mirofish-offline 的 7474/7687，可两个项目并行运行
+      - "7475:7474"   # HTTP / 浏览器 UI（主机端口 7475）
+      - "7688:7687"   # Bolt（主机端口 7688）
     environment:
-      # 密码需与 .env 中的 NEO4J_PASSWORD 保持一致
-      NEO4J_AUTH: "neo4j/mirofish-neo4j"
+      NEO4J_AUTH: "neo4j/mirofish"
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
+    healthcheck:
+      # 5.x community 镜像没自带 wget，但有 curl 不一定有；用 cypher-shell 最稳
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p mirofish 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
     restart: unless-stopped
 
 volumes:
   neo4j_data:
   neo4j_logs:
+  hf_cache:
