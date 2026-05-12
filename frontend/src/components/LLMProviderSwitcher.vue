@@ -23,7 +23,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getLlmProvider, setLlmProvider } from '@/api/settings'
+import { useToast } from '../composables/useToast'
 
+const { showToast } = useToast()
 const switcherRef = ref(null)
 const open = ref(false)
 const loading = ref(false)
@@ -71,7 +73,7 @@ const switchProvider = async (name) => {
     await refresh()
   } catch (e) {
     console.error('Failed to switch LLM provider', e)
-    alert('切换失败：' + (e.response?.data?.error || e.message))
+    showToast('切换失败：' + (e.response?.data?.error || e.message), 'error')
   } finally {
     loading.value = false
   }

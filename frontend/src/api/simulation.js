@@ -122,28 +122,6 @@ export const getSimulationPosts = (simulationId, platform = 'reddit', limit = 50
 }
 
 /**
- * 获取模拟时间线（按轮次汇总）
- * @param {string} simulationId
- * @param {number} startRound - 起始轮次
- * @param {number} endRound - 结束轮次
- */
-export const getSimulationTimeline = (simulationId, startRound = 0, endRound = null) => {
-  const params = { start_round: startRound }
-  if (endRound !== null) {
-    params.end_round = endRound
-  }
-  return service.get(`/api/simulation/${simulationId}/timeline`, { params })
-}
-
-/**
- * 获取Agent统计信息
- * @param {string} simulationId
- */
-export const getAgentStats = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/agent-stats`)
-}
-
-/**
  * 获取模拟动作历史
  * @param {string} simulationId
  * @param {Object} params - { limit, offset, platform, agent_id, round_num }

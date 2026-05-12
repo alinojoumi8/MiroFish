@@ -97,7 +97,18 @@ class TaskManager:
         
         with self._task_lock:
             self._tasks[task_id] = task
-        
+            if len(self._tasks) > 500:
+                # Purge terminal tasks older than 24h to cap memory usage
+                from datetime import timedelta
+                cutoff = datetime.now() - timedelta(hours=24)
+                stale = [
+                    tid for tid, t in self._tasks.items()
+                    if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED)
+                    and t.updated_at < cutoff
+                ]
+                for tid in stale:
+                    del self._tasks[tid]
+
         return task_id
     
     def get_task(self, task_id: str) -> Optional[Task]:

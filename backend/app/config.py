@@ -68,6 +68,7 @@ class Config:
 
     # OASIS模拟配置
     OASIS_DEFAULT_MAX_ROUNDS = int(os.environ.get('OASIS_DEFAULT_MAX_ROUNDS', '10'))
+    OASIS_MAX_RUNTIME_SECONDS = int(os.environ.get('OASIS_MAX_RUNTIME_SECONDS', '3600'))
     OASIS_SIMULATION_DATA_DIR = os.path.join(os.path.dirname(__file__), '../uploads/simulations')
 
     # OASIS平台可用动作配置

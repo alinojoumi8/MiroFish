@@ -21,9 +21,22 @@ services:
       - ./backend/uploads:/app/backend/uploads
       # 持久化 HuggingFace 缓存，避免每次重启重新下载 BGE 模型 (~400MB)
       - hf_cache:/root/.cache/huggingface
+      # === 开发态热重载：在容器内直接看到主机端源代码改动 ===
+      # 改 .py: Flask 的 debug reloader 自动重启
+      # 改 .vue/.js/.json: Vite HMR 立即生效
+      # 部署生产时建议删掉下面四行，让代码以镜像内拷贝为准。
+      - ./backend/app:/app/backend/app
+      - ./frontend/src:/app/frontend/src
+      - ./frontend/index.html:/app/frontend/index.html
+      - ./locales:/app/locales
     depends_on:
       neo4j:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4g
 
   # 本地 Graphiti 记忆存储（替代 Zep Cloud）
   # 仅在 MEMORY_BACKEND=graphiti 时需要
@@ -49,6 +62,11 @@ services:
       retries: 15
       start_period: 40s
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2g
 
 volumes:
   neo4j_data:

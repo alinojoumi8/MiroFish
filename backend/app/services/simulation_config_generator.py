@@ -12,6 +12,7 @@
 
 import json
 import math
+import re
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -228,16 +229,19 @@ class SimulationConfigGenerator:
         base_url: Optional[str] = None,
         model_name: Optional[str] = None
     ):
-        self.api_key = api_key or Config.LLM_API_KEY
-        self.base_url = base_url or Config.LLM_BASE_URL
-        self.model_name = model_name or Config.LLM_MODEL_NAME
-        
+        from ..utils import llm_providers
+        self.api_key = api_key or llm_providers.get_active_api_key()
+        self.base_url = base_url or llm_providers.get_active_base_url()
+        self.model_name = model_name or llm_providers.get_active_model()
+        self._extra_headers = dict(llm_providers.get_active_provider().extra_headers)
+
         if not self.api_key:
-            raise ValueError("LLM_API_KEY 未配置")
-        
+            raise ValueError("LLM API key 未配置，请在设置中选择一个已配置的 LLM provider")
+
         self.client = OpenAI(
             api_key=self.api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
+            default_headers=self._extra_headers if self._extra_headers else None,
         )
     
     def generate_config(
@@ -431,13 +435,17 @@ class SimulationConfigGenerator:
         
         return "\n".join(lines)
     
+    _THINK_RE = re.compile(r"<think>[\s\S]*?</think>", re.IGNORECASE)
+
+    def _strip_think(self, text: str) -> str:
+        """Strip <think>...</think> reasoning blocks emitted by MiniMax / Kimi."""
+        return self._THINK_RE.sub("", text).strip()
+
     def _call_llm_with_retry(self, prompt: str, system_prompt: str) -> Dict[str, Any]:
         """带重试的LLM调用，包含JSON修复逻辑"""
-        import re
-        
         max_attempts = 3
         last_error = None
-        
+
         for attempt in range(max_attempts):
             try:
                 response = self.client.chat.completions.create(
@@ -447,37 +455,40 @@ class SimulationConfigGenerator:
                         {"role": "user", "content": prompt}
                     ],
                     response_format={"type": "json_object"},
-                    temperature=0.7 - (attempt * 0.1)  # 每次重试降低温度
-                    # 不设置max_tokens，让LLM自由发挥
+                    temperature=0.7 - (attempt * 0.1),
                 )
-                
-                content = response.choices[0].message.content
+
+                content = response.choices[0].message.content or ""
                 finish_reason = response.choices[0].finish_reason
-                
+
+                # Strip <think> reasoning blocks (MiniMax M2 / Kimi K2)
+                content = self._strip_think(content)
+
                 # 检查是否被截断
                 if finish_reason == 'length':
                     logger.warning(f"LLM输出被截断 (attempt {attempt+1})")
                     content = self._fix_truncated_json(content)
-                
-                # 尝试解析JSON
+
+                # 尝试解析JSON（用 raw_decode 忽略尾部多余内容）
                 try:
-                    return json.loads(content)
+                    obj, _ = json.JSONDecoder().raw_decode(content.strip())
+                    return obj
                 except json.JSONDecodeError as e:
                     logger.warning(f"JSON解析失败 (attempt {attempt+1}): {str(e)[:80]}")
-                    
+
                     # 尝试修复JSON
                     fixed = self._try_fix_config_json(content)
                     if fixed:
                         return fixed
-                    
+
                     last_error = e
-                    
+
             except Exception as e:
                 logger.warning(f"LLM调用失败 (attempt {attempt+1}): {str(e)[:80]}")
                 last_error = e
                 import time
                 time.sleep(2 * (attempt + 1))
-        
+
         raise last_error or Exception("LLM调用失败")
     
     def _fix_truncated_json(self, content: str) -> str:
@@ -521,14 +532,15 @@ class SimulationConfigGenerator:
             
             try:
                 return json.loads(json_str)
-            except:
+            except json.JSONDecodeError as e:
+                logger.warning("JSON parse attempt 1 failed: %s", e)
                 # 尝试移除所有控制字符
                 json_str = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', json_str)
                 json_str = re.sub(r'\s+', ' ', json_str)
                 try:
                     return json.loads(json_str)
-                except:
-                    pass
+                except json.JSONDecodeError as e2:
+                    logger.warning("JSON parse attempt 2 failed: %s", e2)
         
         return None
     

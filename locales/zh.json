@@ -210,7 +210,9 @@
     "forceStopSuccess": "模拟已强制停止",
     "forceStopFailed": "强制停止失败: {error}",
     "startGenerateReportBtn": "开始生成结果报告",
-    "generatingReportBtn": "启动中..."
+    "generatingReportBtn": "启动中...",
+    "platformTwitter": "信息广场",
+    "platformReddit": "话题社区"
   },
   "step4": {
     "generatingSection": "正在生成{title}...",
@@ -300,7 +302,8 @@
     "graphDataLoading": "图谱数据加载中...",
     "waitingOntology": "等待本体生成...",
     "toggleMaximize": "最大化/还原",
-    "closeHint": "关闭提示"
+    "closeHint": "关闭提示",
+    "emptyGraph": "图谱为空 — 请重新构建图谱以显示节点"
   },
   "history": {
     "title": "推演记录",
@@ -393,7 +396,8 @@
     "envRunning": "环境正在运行，可以接收Interview命令",
     "envNotRunningShort": "环境未运行或已关闭",
     "requireGraphIdAndQuery": "请提供 graph_id 和 query",
-    "initReportAgent": "初始化Report Agent..."
+    "initReportAgent": "初始化Report Agent...",
+    "emptyKnowledgeGraph": "知识图谱为空——请先完成图谱构建步骤"
   },
   "progress": {
     "initGraphService": "初始化图谱构建服务...",

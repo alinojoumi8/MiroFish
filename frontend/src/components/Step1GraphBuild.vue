@@ -191,9 +191,11 @@ import { computed, ref, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { createSimulation } from '../api/simulation'
+import { useToast } from '../composables/useToast'
 
 const router = useRouter()
 const { t } = useI18n()
+const { showToast } = useToast()
 
 const props = defineProps({
   currentPhase: { type: Number, default: 0 },
@@ -235,11 +237,11 @@ const handleEnterEnvSetup = async () => {
       })
     } else {
       console.error('创建模拟失败:', res.error)
-      alert(t('step1.createSimulationFailed', { error: res.error || t('common.unknownError') }))
+      showToast(t('step1.createSimulationFailed', { error: res.error || t('common.unknownError') }), 'error')
     }
   } catch (err) {
     console.error('创建模拟异常:', err)
-    alert(t('step1.createSimulationException', { error: err.message }))
+    showToast(t('step1.createSimulationException', { error: err.message }), 'error')
   } finally {
     creatingSimulation.value = false
   }

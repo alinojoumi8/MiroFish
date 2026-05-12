@@ -1,5 +1,6 @@
 import axios from 'axios'
 import i18n from '../i18n'
+import { useToast } from '../composables/useToast'
 
 // 创建axios实例
 // 默认使用相对路径 (''），让请求落在当前页面 origin，由 Vite dev server 的 /api 代理转发到后端。
@@ -29,28 +30,30 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   response => {
     const res = response.data
-    
-    // 如果返回的状态码不是success，则抛出错误
+
     if (!res.success && res.success !== undefined) {
-      console.error('API Error:', res.error || res.message || 'Unknown error')
-      return Promise.reject(new Error(res.error || res.message || 'Error'))
+      const msg = res.error || res.message || 'Unknown error'
+      console.error('API Error:', msg)
+      const { showToast } = useToast()
+      showToast(msg, 'error')
+      return Promise.reject(new Error(msg))
     }
-    
+
     return res
   },
   error => {
     console.error('Response error:', error)
-    
-    // 处理超时
+    const { showToast } = useToast()
+
     if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
-      console.error('Request timeout')
+      showToast('Request timed out — please try again', 'error')
+    } else if (error.message === 'Network Error') {
+      showToast('Network error — please check your connection', 'error')
+    } else if (error.message && !error.message.startsWith('Request failed')) {
+      // Avoid double-toasting errors already shown above
+      showToast(error.message, 'error')
     }
-    
-    // 处理网络错误
-    if (error.message === 'Network Error') {
-      console.error('Network error - please check your connection')
-    }
-    
+
     return Promise.reject(error)
   }
 )

@@ -46,8 +46,17 @@ class _AsyncRunner:
         )
         self._thread.start()
 
+    _TIMEOUT = 120  # seconds; protects Flask workers from hanging indefinitely
+
     def run(self, coro):
-        return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
+        import concurrent.futures
+        try:
+            return asyncio.run_coroutine_threadsafe(coro, self._loop).result(timeout=self._TIMEOUT)
+        except concurrent.futures.TimeoutError:
+            raise RuntimeError(
+                f"Graphiti operation timed out after {self._TIMEOUT}s "
+                "(check Neo4j connectivity and LLM response time)"
+            )
 
     def shutdown(self) -> None:
         if not self._loop.is_closed():

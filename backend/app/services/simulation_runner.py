@@ -496,21 +496,36 @@ class SimulationRunner:
         
         twitter_position = 0
         reddit_position = 0
-        
+        process_start_time = time.time()
+        max_runtime = Config.OASIS_MAX_RUNTIME_SECONDS
+
         try:
             while process.poll() is None:  # 进程仍在运行
+                # 运行时间超限检查
+                elapsed = time.time() - process_start_time
+                if elapsed > max_runtime:
+                    logger.warning(
+                        "Simulation %s exceeded max runtime (%ss), terminating",
+                        simulation_id, max_runtime
+                    )
+                    cls._terminate_process(process, simulation_id)
+                    state.runner_status = RunnerStatus.FAILED
+                    state.error = f"Simulation timed out after {int(elapsed)}s (limit: {max_runtime}s)"
+                    cls._save_run_state(state)
+                    return
+
                 # 读取 Twitter 动作日志
                 if os.path.exists(twitter_actions_log):
                     twitter_position = cls._read_action_log(
                         twitter_actions_log, twitter_position, state, "twitter"
                     )
-                
+
                 # 读取 Reddit 动作日志
                 if os.path.exists(reddit_actions_log):
                     reddit_position = cls._read_action_log(
                         reddit_actions_log, reddit_position, state, "reddit"
                     )
-                
+
                 # 更新状态
                 cls._save_run_state(state)
                 time.sleep(2)

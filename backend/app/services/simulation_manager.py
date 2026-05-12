@@ -17,6 +17,7 @@ from ..utils.logger import get_logger
 from .zep_entity_reader import ZepEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
+from .memory import get_memory_backend
 from ..utils.locale import t
 
 logger = get_logger('mirofish.simulation')
@@ -262,13 +263,29 @@ class SimulationManager:
         state = self._load_simulation_state(simulation_id)
         if not state:
             raise ValueError(f"模拟不存在: {simulation_id}")
-        
+
+        # Pre-flight: verify the knowledge graph has entity nodes
+        try:
+            memory = get_memory_backend()
+            nodes = memory.get_all_nodes(state.graph_id)
+            entity_nodes = [n for n in nodes if not any(
+                lbl in ("Episodic", "EpisodicNode") for lbl in (n.labels or [])
+            )]
+            if not entity_nodes:
+                state.status = SimulationStatus.FAILED
+                state.error = t('api.emptyKnowledgeGraph')
+                self._save_simulation_state(state)
+                return state
+        except Exception as preflight_err:
+            logger.warning("Pre-flight graph check failed: %s", preflight_err)
+            # Non-fatal: let the entity reader surface a clearer error below
+
         try:
             state.status = SimulationStatus.PREPARING
             self._save_simulation_state(state)
-            
+
             sim_dir = self._get_simulation_dir(simulation_id)
-            
+
             # ========== 阶段1: 读取并过滤实体 ==========
             if progress_callback:
                 progress_callback("reading", 0, t('progress.connectingZepGraph'))
