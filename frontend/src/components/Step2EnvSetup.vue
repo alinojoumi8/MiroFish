@@ -712,6 +712,8 @@ let profilesTimer = null
 let configTimer = null
 let pollDelay = 2000      // exponential backoff state for task status polling
 let pollLastStatus = null // track status changes to reset backoff
+let configPollCount = 0   // guard against infinite config polling
+const CONFIG_POLL_MAX = 90 // ~3 minutes at 2s intervals
 
 // Computed
 const displayProfiles = computed(() => {
@@ -980,17 +982,27 @@ const stopConfigPolling = () => {
     clearInterval(configTimer)
     configTimer = null
   }
+  configPollCount = 0
 }
 
 const fetchConfigRealtime = async () => {
   if (!props.simulationId) return
-  
+
+  // Guard: abort after ~3 minutes of polling with no result
+  configPollCount++
+  if (configPollCount > CONFIG_POLL_MAX) {
+    stopConfigPolling()
+    addLog(t('log.configPollTimeout'))
+    emit('update-status', 'error')
+    return
+  }
+
   try {
     const res = await getSimulationConfigRealtime(props.simulationId)
-    
+
     if (res.success && res.data) {
       const data = res.data
-      
+
       // 输出配置生成阶段日志（避免重复）
       if (data.generation_stage && data.generation_stage !== lastLoggedConfigStage) {
         lastLoggedConfigStage = data.generation_stage
@@ -1000,34 +1012,37 @@ const fetchConfigRealtime = async () => {
           addLog(t('log.generatingLLMConfig'))
         }
       }
-      
-      // 如果配置已生成
-      if (data.config_generated && data.config) {
-        simulationConfig.value = data.config
-        addLog(t('log.configComplete'))
 
-        // 显示详细配置摘要
-        if (data.summary) {
-          addLog(t('log.configSummaryAgents', { count: data.summary.total_agents }))
-          addLog(t('log.configSummaryHours', { hours: data.summary.simulation_hours }))
-          addLog(t('log.configSummaryPosts', { count: data.summary.initial_posts_count }))
-          addLog(t('log.configSummaryTopics', { count: data.summary.hot_topics_count }))
-          addLog(t('log.configSummaryPlatforms', { twitter: data.summary.has_twitter_config ? '✓' : '✗', reddit: data.summary.has_reddit_config ? '✓' : '✗' }))
+      // 配置已生成标志为 true 时即可推进，无论 config JSON 是否同步到达
+      if (data.config_generated) {
+        stopConfigPolling()  // stop first — resets configPollCount too
+
+        if (data.config) {
+          simulationConfig.value = data.config
+          addLog(t('log.configComplete'))
+
+          // 显示详细配置摘要
+          if (data.summary) {
+            addLog(t('log.configSummaryAgents', { count: data.summary.total_agents }))
+            addLog(t('log.configSummaryHours', { hours: data.summary.simulation_hours }))
+            addLog(t('log.configSummaryPosts', { count: data.summary.initial_posts_count }))
+            addLog(t('log.configSummaryTopics', { count: data.summary.hot_topics_count }))
+            addLog(t('log.configSummaryPlatforms', { twitter: data.summary.has_twitter_config ? '✓' : '✗', reddit: data.summary.has_reddit_config ? '✓' : '✗' }))
+          }
+
+          // 显示时间配置详情
+          if (data.config.time_config) {
+            const tc = data.config.time_config
+            addLog(t('log.timeConfigDetail', { minutes: tc.minutes_per_round, rounds: Math.floor((tc.total_simulation_hours * 60) / tc.minutes_per_round) }))
+          }
+
+          // 显示事件配置
+          if (data.config.event_config?.narrative_direction) {
+            const narrative = data.config.event_config.narrative_direction
+            addLog(t('log.narrativeDirection', { direction: narrative.length > 50 ? narrative.substring(0, 50) + '...' : narrative }))
+          }
         }
-        
-        // 显示时间配置详情
-        if (data.config.time_config) {
-          const tc = data.config.time_config
-          addLog(t('log.timeConfigDetail', { minutes: tc.minutes_per_round, rounds: Math.floor((tc.total_simulation_hours * 60) / tc.minutes_per_round) }))
-        }
-        
-        // 显示事件配置
-        if (data.config.event_config?.narrative_direction) {
-          const narrative = data.config.event_config.narrative_direction
-          addLog(t('log.narrativeDirection', { direction: narrative.length > 50 ? narrative.substring(0, 50) + '...' : narrative }))
-        }
-        
-        stopConfigPolling()
+
         phase.value = 4
         addLog(t('log.envSetupComplete'))
         emit('update-status', 'completed')
@@ -1050,15 +1065,18 @@ const loadPreparedData = async () => {
   try {
     const res = await getSimulationConfigRealtime(props.simulationId)
     if (res.success && res.data) {
-      if (res.data.config_generated && res.data.config) {
-        simulationConfig.value = res.data.config
-        addLog(t('log.configLoadSuccess'))
+      if (res.data.config_generated) {
+        // Config flag is set — proceed to phase 4 even if JSON file read is momentarily null
+        if (res.data.config) {
+          simulationConfig.value = res.data.config
+          addLog(t('log.configLoadSuccess'))
 
-        // 显示详细配置摘要
-        if (res.data.summary) {
-          addLog(t('log.configSummaryAgents', { count: res.data.summary.total_agents }))
-          addLog(t('log.configSummaryHours', { hours: res.data.summary.simulation_hours }))
-          addLog(t('log.configSummaryPostsAlt', { count: res.data.summary.initial_posts_count }))
+          // 显示详细配置摘要
+          if (res.data.summary) {
+            addLog(t('log.configSummaryAgents', { count: res.data.summary.total_agents }))
+            addLog(t('log.configSummaryHours', { hours: res.data.summary.simulation_hours }))
+            addLog(t('log.configSummaryPostsAlt', { count: res.data.summary.initial_posts_count }))
+          }
         }
 
         addLog(t('log.envSetupComplete'))
@@ -1067,6 +1085,7 @@ const loadPreparedData = async () => {
       } else {
         // 配置尚未生成，开始轮询
         addLog(t('log.configGenerating'))
+        configPollCount = 0  // fresh start for the poll counter
         startConfigPolling()
       }
     }

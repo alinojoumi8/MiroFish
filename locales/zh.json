@@ -537,6 +537,7 @@
     "timeConfigDetail": "时间配置: 每轮{minutes}分钟, 共{rounds}轮",
     "narrativeDirection": "叙事方向: {direction}",
     "envSetupComplete": "✓ 环境搭建完成，可以开始模拟",
+    "configPollTimeout": "⚠ 配置轮询超时（3分钟）。后端可能仍在生成中，请检查日志或重置后重试。",
     "startSimCustomRounds": "开始模拟，自定义轮数: {rounds} 轮",
     "startSimAutoRounds": "开始模拟，使用自动配置轮数: {rounds} 轮",
     "startGeneratingAgentProfiles": "开始生成Agent人设...",

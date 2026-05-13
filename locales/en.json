@@ -537,6 +537,7 @@
     "timeConfigDetail": "Time config: {minutes} min/round, {rounds} rounds total",
     "narrativeDirection": "Narrative direction: {direction}",
     "envSetupComplete": "✓ Environment setup complete, ready to simulate",
+    "configPollTimeout": "⚠ Config polling timed out (3 min). The backend may still be generating — check logs or reset and retry.",
     "startSimCustomRounds": "Starting simulation, custom rounds: {rounds}",
     "startSimAutoRounds": "Starting simulation, auto-configured rounds: {rounds}",
     "startGeneratingAgentProfiles": "Generating agent personas...",
