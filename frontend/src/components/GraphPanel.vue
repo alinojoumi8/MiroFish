@@ -18,7 +18,17 @@
       <!-- 图谱可视化 -->
       <div v-if="graphData" class="graph-view">
         <svg ref="graphSvg" class="graph-svg"></svg>
-        
+
+        <!-- 空图谱提示（有数据但节点数为0，且不在构建/模拟中） -->
+        <div v-if="!loading && currentPhase !== 1 && !isSimulating && graphData && (graphData.node_count === 0 || (graphData.nodes && graphData.nodes.length === 0))" class="graph-empty-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 8v4M12 16h.01"/>
+          </svg>
+          <span>{{ $t('graph.emptyGraph') }}</span>
+          <button class="hint-refresh-btn" @click="$emit('refresh')">{{ $t('graph.refreshGraph') }}</button>
+        </div>
+
         <!-- 构建中/模拟中提示 -->
         <div v-if="currentPhase === 1 || isSimulating" class="graph-building-hint">
           <div class="memory-icon-wrapper">
@@ -1292,6 +1302,36 @@ input:checked + .slider:before {
 .hint-close-btn:hover {
   background: rgba(255, 255, 255, 0.35);
   transform: scale(1.1);
+}
+
+.graph-empty-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #999;
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.graph-empty-hint .hint-refresh-btn {
+  pointer-events: all;
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.graph-empty-hint .hint-refresh-btn:hover {
+  background: #f5f5f5;
 }
 
 /* Loading spinner */

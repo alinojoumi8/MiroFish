@@ -1641,6 +1641,31 @@ def start_simulation():
         }), 500
 
 
+@simulation_bp.route('/reset-all', methods=['POST'])
+def reset_all_simulations():
+    """
+    停止所有正在运行的模拟进程，允许用户重新开始。
+
+    不删除任何数据——仅终止进程并将运行状态标记为 stopped。
+    """
+    try:
+        # Allow cleanup_all_simulations to run again (it guards against double-call at shutdown)
+        SimulationRunner._cleanup_done = False
+        SimulationRunner.cleanup_all_simulations()
+        SimulationRunner._cleanup_done = False  # reset again so future calls still work
+
+        killed = list(SimulationRunner._processes.keys()) if hasattr(SimulationRunner, '_processes') else []
+        logger.info("reset-all: terminated %d simulation process(es)", len(killed))
+
+        return jsonify({
+            "success": True,
+            "data": {"message": "All simulation processes stopped", "stopped_count": len(killed)}
+        })
+    except Exception as e:
+        logger.error("reset-all failed: %s", e)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @simulation_bp.route('/stop', methods=['POST'])
 def stop_simulation():
     """

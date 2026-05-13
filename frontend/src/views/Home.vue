@@ -4,6 +4,7 @@
     <nav class="navbar">
       <div class="nav-brand">MIROFISH</div>
       <div class="nav-links">
+        <ResetButton :dark="true" />
         <LLMProviderSwitcher />
         <LanguageSwitcher />
         <a href="https://github.com/666ghj/MiroFish" target="_blank" class="github-link">
@@ -251,6 +252,7 @@ import { useI18n } from 'vue-i18n'
 import HistoryDatabase from '../components/HistoryDatabase.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import LLMProviderSwitcher from '../components/LLMProviderSwitcher.vue'
+import ResetButton from '../components/ResetButton.vue'
 
 const router = useRouter()
 const { t } = useI18n()

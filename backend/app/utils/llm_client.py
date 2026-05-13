@@ -123,6 +123,7 @@ class LLMClient:
         cleaned_response = cleaned_response.strip()
 
         try:
-            return json.loads(cleaned_response)
+            obj, _ = json.JSONDecoder().raw_decode(cleaned_response)
+            return obj
         except json.JSONDecodeError:
             raise ValueError(f"LLM返回的JSON格式无效: {cleaned_response}")

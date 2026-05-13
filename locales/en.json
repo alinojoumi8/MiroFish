@@ -291,6 +291,17 @@
     "requestFailed": "Request failed",
     "selectAgentFirst": "Please select a simulated individual first"
   },
+  "reset": {
+    "label": "Reset",
+    "tooltip": "Stop all running processes and return to home",
+    "confirm": "Confirm?",
+    "confirmMsg": "This will stop all running simulations and return you to the home screen.",
+    "confirmYes": "Stop & Reset",
+    "confirmNo": "Cancel",
+    "resetting": "Stopping...",
+    "success": "All processes stopped — ready to start fresh",
+    "failed": "Reset failed: {error}"
+  },
   "graph": {
     "panelTitle": "Graph Relationship Visualization",
     "refreshGraph": "Refresh Graph",

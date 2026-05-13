@@ -163,3 +163,10 @@ export const getSimulationHistory = (limit = 20) => {
   return service.get('/api/simulation/history', { params: { limit } })
 }
 
+/**
+ * 停止所有正在运行的模拟进程，允许重新开始
+ */
+export const resetAllSimulations = () => {
+  return service.post('/api/simulation/reset-all')
+}
+

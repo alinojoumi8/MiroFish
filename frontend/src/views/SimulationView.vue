@@ -21,6 +21,8 @@
       </div>
 
       <div class="header-right">
+        <ResetButton />
+        <div class="step-divider"></div>
         <LLMProviderSwitcher />
         <LanguageSwitcher />
         <div class="step-divider"></div>
@@ -75,6 +77,7 @@ import { getProject, getGraphData } from '../api/graph'
 import { getSimulation, stopSimulation, getEnvStatus, closeSimulationEnv } from '../api/simulation'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import LLMProviderSwitcher from '../components/LLMProviderSwitcher.vue'
+import ResetButton from '../components/ResetButton.vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()

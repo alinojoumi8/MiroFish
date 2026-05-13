@@ -21,6 +21,8 @@
       </div>
 
       <div class="header-right">
+        <ResetButton />
+        <div class="step-divider"></div>
         <LLMProviderSwitcher />
         <LanguageSwitcher />
         <div class="step-divider"></div>
@@ -88,6 +90,7 @@ import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData }
 import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import LLMProviderSwitcher from '../components/LLMProviderSwitcher.vue'
+import ResetButton from '../components/ResetButton.vue'
 
 const route = useRoute()
 const router = useRouter()

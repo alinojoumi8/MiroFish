@@ -291,6 +291,17 @@
     "requestFailed": "请求失败",
     "selectAgentFirst": "请先选择一个模拟个体"
   },
+  "reset": {
+    "label": "重置",
+    "tooltip": "停止所有运行中的进程并返回主页",
+    "confirm": "确认？",
+    "confirmMsg": "这将停止所有正在运行的模拟，并返回主页。",
+    "confirmYes": "停止并重置",
+    "confirmNo": "取消",
+    "resetting": "停止中...",
+    "success": "所有进程已停止——可以重新开始",
+    "failed": "重置失败: {error}"
+  },
   "graph": {
     "panelTitle": "Graph Relationship Visualization",
     "refreshGraph": "刷新图谱",
