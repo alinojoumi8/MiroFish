@@ -1,4 +1,10 @@
 {
+  "llm": {
+    "notConfigured": "未配置",
+    "loadingProviders": "加载中...",
+    "fetchError": "无法连接后端",
+    "switchFailed": "切换失败：{error}"
+  },
   "common": {
     "confirm": "确认",
     "cancel": "取消",

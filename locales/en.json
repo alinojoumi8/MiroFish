@@ -1,4 +1,10 @@
 {
+  "llm": {
+    "notConfigured": "Not configured",
+    "loadingProviders": "Loading...",
+    "fetchError": "Cannot reach backend",
+    "switchFailed": "Switch failed: {error}"
+  },
   "common": {
     "confirm": "Confirm",
     "cancel": "Cancel",

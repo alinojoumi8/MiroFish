@@ -6,7 +6,14 @@
       <span class="caret">{{ open ? '▲' : '▼' }}</span>
     </button>
     <ul v-if="open" class="switcher-dropdown">
+      <li v-if="fetchError" class="switcher-option disabled fetch-error">
+        <span class="opt-label">{{ $t('llm.fetchError') }}</span>
+      </li>
+      <li v-else-if="providers.length === 0" class="switcher-option disabled">
+        <span class="opt-label">{{ $t('llm.loadingProviders') }}</span>
+      </li>
       <li
+        v-else
         v-for="p in providers"
         :key="p.name"
         class="switcher-option"
@@ -14,7 +21,7 @@
         @click="p.configured && switchProvider(p.name)"
       >
         <span class="opt-label">{{ p.label }}</span>
-        <span v-if="!p.configured" class="opt-hint">未配置</span>
+        <span v-if="!p.configured" class="opt-hint">{{ $t('llm.notConfigured') }}</span>
       </li>
     </ul>
   </div>
@@ -22,13 +29,16 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getLlmProvider, setLlmProvider } from '@/api/settings'
 import { useToast } from '../composables/useToast'
 
+const { t } = useI18n()
 const { showToast } = useToast()
 const switcherRef = ref(null)
 const open = ref(false)
 const loading = ref(false)
+const fetchError = ref(false)
 const providers = ref([])
 const activeName = ref('')
 const activeLabel = ref('LLM')
@@ -42,6 +52,7 @@ const activeConfigured = computed(() => {
 const tooltip = computed(() => activeModel.value ? `Model: ${activeModel.value}` : 'LLM Provider')
 
 const refresh = async () => {
+  fetchError.value = false
   try {
     const res = await getLlmProvider()
     providers.value = res.available || []
@@ -52,6 +63,7 @@ const refresh = async () => {
     }
   } catch (e) {
     console.error('Failed to load LLM providers', e)
+    fetchError.value = true
   }
 }
 
@@ -73,7 +85,7 @@ const switchProvider = async (name) => {
     await refresh()
   } catch (e) {
     console.error('Failed to switch LLM provider', e)
-    showToast('切换失败：' + (e.response?.data?.error || e.message), 'error')
+    showToast(t('llm.switchFailed', { error: e.response?.data?.error || e.message }), 'error')
   } finally {
     loading.value = false
   }
@@ -162,5 +174,10 @@ onUnmounted(() => {
 .opt-hint {
   font-size: 0.7rem;
   color: #999;
+}
+
+.fetch-error {
+  color: #cc3300;
+  font-style: italic;
 }
 </style>
