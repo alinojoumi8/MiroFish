@@ -3,7 +3,8 @@
 
 通过 `get_memory_backend()` 获取当前激活的后端实例。
 后端选择由 `Config.MEMORY_BACKEND` 决定：
-- "graphiti": 本地 Neo4j + Graphiti（默认）
+- "lightrag": LightRAG + FalkorDB（默认，推荐 — 最快，MIT 许可）
+- "graphiti": 本地 Neo4j + Graphiti（兜底选项）
 - "zep":      Zep Cloud（兜底）
 """
 
@@ -39,9 +40,12 @@ def get_memory_backend() -> MemoryBackend:
         elif backend_name == 'graphiti':
             from .graphiti_backend import GraphitiBackend
             _instance = GraphitiBackend()
+        elif backend_name == 'lightrag':
+            from .lightrag_backend import LightRAGBackend
+            _instance = LightRAGBackend()
         else:
             raise ValueError(
-                f"未知的 MEMORY_BACKEND: {backend_name}（支持 graphiti / zep）"
+                f"未知的 MEMORY_BACKEND: {backend_name}（支持 lightrag / graphiti / zep）"
             )
         return _instance
 

@@ -45,13 +45,19 @@ class Config:
     OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
 
     # ===== 记忆后端配置 =====
-    # MEMORY_BACKEND: "graphiti"（本地 Neo4j）或 "zep"（Zep Cloud 兜底）
-    MEMORY_BACKEND = os.environ.get('MEMORY_BACKEND', 'graphiti').lower()
+    # MEMORY_BACKEND: "lightrag"（FalkorDB，默认）/ "graphiti"（Neo4j）/ "zep"（Zep Cloud）
+    MEMORY_BACKEND = os.environ.get('MEMORY_BACKEND', 'lightrag').lower()
 
     # Zep Cloud（仅在 MEMORY_BACKEND=zep 时需要）
     ZEP_API_KEY = os.environ.get('ZEP_API_KEY')
 
-    # Graphiti / Neo4j（本地）
+    # LightRAG + FalkorDB（本地，默认后端）
+    FALKORDB_HOST = os.environ.get('FALKORDB_HOST', 'localhost')
+    FALKORDB_PORT = int(os.environ.get('FALKORDB_PORT', '6379'))
+    # 本地向量 / KV 状态文件存放目录（留空则使用 uploads/lightrag/）
+    LIGHTRAG_WORKING_DIR = os.environ.get('LIGHTRAG_WORKING_DIR', '')
+
+    # Graphiti / Neo4j（兜底，MEMORY_BACKEND=graphiti 时使用）
     NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
     NEO4J_USER = os.environ.get('NEO4J_USER', 'neo4j')
     NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', 'mirofish-neo4j')
@@ -113,7 +119,11 @@ class Config:
             )
 
         # Memory backend
-        if cls.MEMORY_BACKEND == 'zep':
+        if cls.MEMORY_BACKEND == 'lightrag':
+            # FalkorDB 连接性在后端启动时 probe；这里只校验主机非空
+            if not cls.FALKORDB_HOST:
+                errors.append("MEMORY_BACKEND=lightrag 但 FALKORDB_HOST 未配置")
+        elif cls.MEMORY_BACKEND == 'zep':
             if not cls.ZEP_API_KEY:
                 errors.append("MEMORY_BACKEND=zep 但 ZEP_API_KEY 未配置")
         elif cls.MEMORY_BACKEND == 'graphiti':
@@ -121,6 +131,6 @@ class Config:
             if not cls.NEO4J_URI or not cls.NEO4J_USER or not cls.NEO4J_PASSWORD:
                 errors.append("MEMORY_BACKEND=graphiti 但 NEO4J_URI/USER/PASSWORD 未完整配置")
         else:
-            errors.append(f"未知的 MEMORY_BACKEND: {cls.MEMORY_BACKEND}（支持 graphiti / zep）")
+            errors.append(f"未知的 MEMORY_BACKEND: {cls.MEMORY_BACKEND}（支持 lightrag / graphiti / zep）")
 
         return errors

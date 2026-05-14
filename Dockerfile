@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # MiroFish dev/runtime image
 # - Builds frontend with vite + runs Flask backend
-# - Memory backend = Graphiti + local Neo4j (reached via compose service "neo4j")
+# - Memory backend = LightRAG + FalkorDB (reached via compose service "falkordb")
 # - First container start downloads BAAI/bge-* models to /root/.cache/huggingface
 
 FROM python:3.11-slim
@@ -38,9 +38,9 @@ COPY . .
 ENV PYTHONUNBUFFERED=1 \
     FLASK_HOST=0.0.0.0 \
     FLASK_PORT=5001 \
-    MEMORY_BACKEND=graphiti \
-    NEO4J_URI=bolt://neo4j:7687 \
-    NEO4J_USER=neo4j \
+    MEMORY_BACKEND=lightrag \
+    FALKORDB_HOST=falkordb \
+    FALKORDB_PORT=6379 \
     HF_HOME=/root/.cache/huggingface
 
 EXPOSE 3000 5001
