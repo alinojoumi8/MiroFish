@@ -52,9 +52,9 @@ class GraphBuilderService:
         text: str,
         ontology: Dict[str, Any],
         graph_name: str = "MiroFish Graph",
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
-        batch_size: int = 3
+        chunk_size: int = 1500,   # was 500 — larger chunks → fewer episodes → fewer LLM round trips
+        chunk_overlap: int = 150,  # was 50 — scale with chunk size to preserve context at boundaries
+        batch_size: int = 5
     ) -> str:
         """
         异步构建图谱
@@ -237,9 +237,9 @@ class GraphBuilderService:
                     if ep.uuid:
                         episode_uuids.append(ep.uuid)
 
-                # 避免请求过快
-                time.sleep(1)
-                
+                # No sleep needed — memory backend is local (Neo4j/Graphiti),
+                # not a cloud API with rate limits.
+
             except Exception as e:
                 if progress_callback:
                     progress_callback(t('progress.batchFailed', batch=batch_num, error=str(e)), 0)
@@ -254,6 +254,16 @@ class GraphBuilderService:
         timeout: int = 600
     ):
         """等待所有 episode 处理完成（通过查询每个 episode 的 processed 状态）"""
+        # Graphiti processes episodes synchronously — they are always done by the
+        # time add_batch() returns. Skip the polling loop entirely to avoid the
+        # 3-second poll delay and the misleading Zep-era "waiting" log messages.
+        if Config.MEMORY_BACKEND == 'graphiti':
+            if progress_callback:
+                progress_callback(t('progress.processingComplete',
+                                   completed=len(episode_uuids),
+                                   total=len(episode_uuids)), 1.0)
+            return
+
         if not episode_uuids:
             if progress_callback:
                 progress_callback(t('progress.noEpisodesWait'), 1.0)
