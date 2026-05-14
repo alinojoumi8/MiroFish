@@ -68,7 +68,7 @@ class _AsyncRunner:
 # ===== Embedder：本地 sentence-transformers =====
 
 def _build_local_embedder():
-    """返回 graphiti_core.embedder.EmbedderClient 接口兼容对象。"""
+    """返回 graphiti_core.embedder.EmbedderClient 接口兼容对象（本地 CPU 推理）。"""
     from sentence_transformers import SentenceTransformer
     from graphiti_core.embedder.client import EmbedderClient, EmbedderConfig  # type: ignore
 
@@ -95,6 +95,63 @@ def _build_local_embedder():
             return [v.tolist() for v in vecs]
 
     return _STEmbedder()
+
+
+# ===== Embedder：OpenRouter API（无需本地模型文件）=====
+
+def _build_api_embedder():
+    """
+    OpenRouter / 任意 OpenAI 兼容 embeddings 端点。
+    优点：跳过本地模型下载（~2GB），降低内存占用。
+    配置：OPENROUTER_API_KEY、OPENROUTER_EMBEDDING_MODEL、OPENROUTER_EMBEDDING_DIM。
+    """
+    from openai import AsyncOpenAI  # type: ignore
+    from graphiti_core.embedder.client import EmbedderClient, EmbedderConfig  # type: ignore
+
+    api_key = Config.OPENROUTER_API_KEY
+    model   = Config.OPENROUTER_EMBEDDING_MODEL
+    dim     = Config.OPENROUTER_EMBEDDING_DIM
+
+    if not api_key:
+        raise RuntimeError(
+            "EMBEDDING_PROVIDER=openrouter but OPENROUTER_API_KEY is not set. "
+            "Add it to your .env file."
+        )
+
+    _client = AsyncOpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "https://mirofish.local",
+            "X-Title": "MiroFish",
+        },
+    )
+
+    class _APIEmbedder(EmbedderClient):
+        def __init__(self) -> None:
+            self.config = EmbedderConfig(embedding_dim=dim)
+
+        async def _embed_texts(self, texts: list) -> list:
+            resp = await _client.embeddings.create(model=model, input=texts)
+            return [item.embedding for item in resp.data]
+
+        async def create(self, input_data):  # type: ignore[override]
+            if isinstance(input_data, list):
+                if not input_data:
+                    return []
+                return await self._embed_texts(input_data)
+            result = await self._embed_texts([input_data])
+            return result[0]
+
+        async def create_batch(self, input_data_list):  # type: ignore[override]
+            if not input_data_list:
+                return []
+            return await self._embed_texts(input_data_list)
+
+    logger.info(
+        f"Using OpenRouter embedder: model={model}, dim={dim}"
+    )
+    return _APIEmbedder()
 
 
 # ===== Cross-Encoder：本地 BGE reranker =====
@@ -337,7 +394,10 @@ class GraphitiBackend(MemoryBackend):
         # 延迟导入，避免在测试环境无依赖时报错
         from graphiti_core import Graphiti  # type: ignore
 
-        embedder = _build_local_embedder()
+        if Config.EMBEDDING_PROVIDER == 'openrouter':
+            embedder = _build_api_embedder()
+        else:
+            embedder = _build_local_embedder()
         reranker = _build_local_reranker()
         llm = _build_graphiti_llm()
 

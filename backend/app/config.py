@@ -41,6 +41,9 @@ class Config:
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
 
+    # OpenRouter（LLM 生成 + 可选嵌入）
+    OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY')
+
     # ===== 记忆后端配置 =====
     # MEMORY_BACKEND: "graphiti"（本地 Neo4j）或 "zep"（Zep Cloud 兜底）
     MEMORY_BACKEND = os.environ.get('MEMORY_BACKEND', 'graphiti').lower()
@@ -53,9 +56,19 @@ class Config:
     NEO4J_USER = os.environ.get('NEO4J_USER', 'neo4j')
     NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', 'mirofish-neo4j')
 
-    # 本地嵌入 / 重排序模型（CPU 友好）
+    # 嵌入后端：local（sentence-transformers）或 openrouter（API）
+    EMBEDDING_PROVIDER = os.environ.get('EMBEDDING_PROVIDER', 'local').lower()
+
+    # 本地嵌入 / 重排序模型（CPU 友好；EMBEDDING_PROVIDER=local 时使用）
     EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'BAAI/bge-small-en-v1.5')
     RERANKER_MODEL = os.environ.get('RERANKER_MODEL', 'BAAI/bge-reranker-base')
+
+    # OpenRouter 嵌入配置（EMBEDDING_PROVIDER=openrouter 时使用）
+    OPENROUTER_EMBEDDING_MODEL = os.environ.get(
+        'OPENROUTER_EMBEDDING_MODEL', 'nvidia/llama-nemotron-embed-vl-1b-v2:free'
+    )
+    # nemotron-embed-vl-1b-v2 输出 2048 维；其他模型可通过此变量覆盖
+    OPENROUTER_EMBEDDING_DIM = int(os.environ.get('OPENROUTER_EMBEDDING_DIM', '2048'))
 
     # 文件上传配置
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB

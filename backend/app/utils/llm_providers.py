@@ -51,6 +51,19 @@ PROVIDERS: Dict[str, ProviderProfile] = {
         # 用户授权下，MiroFish 以这些客户端的身份标识发起请求。
         extra_headers=(("User-Agent", "claude-cli/1.0.0"),),
     ),
+    "openrouter": ProviderProfile(
+        name="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        # Free, capable model; user can override via UI custom-model field
+        default_model="deepseek/deepseek-chat-v3-0324:free",
+        api_key_env="OPENROUTER_API_KEY",
+        label="OpenRouter",
+        # OpenRouter requires these headers for free-tier and attribution
+        extra_headers=(
+            ("HTTP-Referer", "https://mirofish.local"),
+            ("X-Title", "MiroFish"),
+        ),
+    ),
     "custom": ProviderProfile(
         name="custom",
         base_url="",  # 运行时从 LLM_BASE_URL 读取
