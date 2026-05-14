@@ -1,6 +1,6 @@
 <template>
   <div class="provider-switcher" ref="switcherRef">
-    <button class="switcher-trigger" :title="tooltip" @click="toggleDropdown" :disabled="loading">
+    <button class="switcher-trigger" :class="{ dark: props.dark }" :title="tooltip" @click="toggleDropdown" :disabled="loading">
       <span class="prov-dot" :class="{ ready: activeConfigured }"></span>
       {{ activeLabel }}
       <span class="caret">{{ open ? '▲' : '▼' }}</span>
@@ -32,6 +32,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getLlmProvider, setLlmProvider } from '@/api/settings'
 import { useToast } from '../composables/useToast'
+
+const props = defineProps({
+  dark: { type: Boolean, default: false }
+})
 
 const { t } = useI18n()
 const { showToast } = useToast()
@@ -179,5 +183,22 @@ onUnmounted(() => {
 .fetch-error {
   color: #cc3300;
   font-style: italic;
+}
+
+/* Dark navbar variant */
+.switcher-trigger.dark {
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.4);
+  background: transparent;
+}
+.switcher-trigger.dark:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.8);
+  color: #fff;
+}
+.switcher-trigger.dark .prov-dot {
+  background: rgba(255, 255, 255, 0.3);
+}
+.switcher-trigger.dark .prov-dot.ready {
+  background: #2ECC71;
 }
 </style>
