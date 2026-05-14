@@ -49,6 +49,7 @@
             <span class="step-title">{{ $t('step2.generateAgentPersona') }}</span>
           </div>
           <div class="step-status">
+            <span v-if="phaseTimers.personas" class="phase-timer" :class="{ frozen: phaseTimers.personas?.frozen }">{{ fmtTimer('personas') }}</span>
             <span v-if="phase > 1" class="badge success">{{ $t('common.completed') }}</span>
             <span v-else-if="phase === 1" class="badge processing">{{ prepareProgress }}%</span>
             <span v-else class="badge pending">{{ $t('common.pending') }}</span>
@@ -121,6 +122,7 @@
             <span class="step-title">{{ $t('step2.dualPlatformConfig') }}</span>
           </div>
           <div class="step-status">
+            <span v-if="phaseTimers.config" class="phase-timer" :class="{ frozen: phaseTimers.config?.frozen }">{{ fmtTimer('config') }}</span>
             <span v-if="phase > 2" class="badge success">{{ $t('common.completed') }}</span>
             <span v-else-if="phase === 2" class="badge processing">{{ $t('step2.generating') }}</span>
             <span v-else class="badge pending">{{ $t('common.pending') }}</span>
@@ -671,6 +673,46 @@ let lastLoggedMessage = ''
 let lastLoggedProfileCount = 0
 let lastLoggedConfigStage = ''
 
+// --- Phase timers ---
+const phaseTimers = ref({})
+
+const startTimer = (name) => {
+  if (phaseTimers.value[name]?.intervalId) return
+  const start = Date.now()
+  const id = setInterval(() => {
+    if (phaseTimers.value[name]) {
+      phaseTimers.value[name].elapsed = Math.floor((Date.now() - start) / 1000)
+    }
+  }, 1000)
+  phaseTimers.value[name] = { start, elapsed: 0, frozen: false, intervalId: id }
+}
+
+const stopTimer = (name) => {
+  const entry = phaseTimers.value[name]
+  if (entry?.intervalId) {
+    clearInterval(entry.intervalId)
+    entry.intervalId = null
+    entry.frozen = true
+  }
+}
+
+const fmtTimer = (name) => {
+  const s = phaseTimers.value[name]?.elapsed ?? 0
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return m > 0 ? `${m}m ${sec}s` : `${sec}s`
+}
+
+// Drive timers from phase
+watch(phase, (newPhase) => {
+  if (newPhase === 1) startTimer('personas')
+  if (newPhase === 2) {
+    stopTimer('personas')
+    startTimer('config')
+  }
+  if (newPhase === 4) stopTimer('config')
+})
+
 // 模拟轮数配置
 const useCustomRounds = ref(false) // 默认使用自动配置轮数
 const customMaxRounds = ref(40)   // 默认推荐40轮
@@ -1117,6 +1159,7 @@ onUnmounted(() => {
   stopPolling()
   stopProfilesPolling()
   stopConfigPolling()
+  Object.values(phaseTimers.value).forEach(entry => { if (entry?.intervalId) clearInterval(entry.intervalId) })
 })
 </script>
 
@@ -1197,6 +1240,17 @@ onUnmounted(() => {
 .badge.processing { background: #FF5722; color: #FFF; }
 .badge.pending { background: #F5F5F5; color: #999; }
 .badge.accent { background: #E3F2FD; color: #1565C0; }
+
+.phase-timer {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #FF5722;
+  font-weight: 600;
+  margin-right: 8px;
+}
+.phase-timer.frozen {
+  color: #999;
+}
 
 .card-content {
   /* No extra padding - uses step-card's padding */

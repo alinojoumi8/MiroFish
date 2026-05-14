@@ -38,6 +38,24 @@
       </div>
     </header>
 
+    <!-- Resume Banner -->
+    <Transition name="banner-slide">
+      <div v-if="resumeBanner && !resumeBannerDismissed" class="resume-banner">
+        <div class="banner-content">
+          <span class="banner-icon">↺</span>
+          <span class="banner-text">
+            Graph already built — resume from
+            <strong>{{ resumeBanner.sim.simulation_id }}</strong>
+            <span class="banner-status" :class="resumeBanner.sim.status">{{ resumeBanner.sim.status }}</span>
+          </span>
+        </div>
+        <div class="banner-actions">
+          <button class="banner-btn primary" @click="resumeToSimulation">Resume Simulation →</button>
+          <button class="banner-btn ghost" @click="dismissResumeBanner">Start Fresh</button>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Main Content Area -->
     <main class="content-area">
       <!-- Left Panel: Graph -->
@@ -88,6 +106,7 @@ import Step1GraphBuild from '../components/Step1GraphBuild.vue'
 import Step2EnvSetup from '../components/Step2EnvSetup.vue'
 import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData } from '../api/graph'
 import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
+import { getSimulationForProject } from '../api/simulation'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import LLMProviderSwitcher from '../components/LLMProviderSwitcher.vue'
 import ResetButton from '../components/ResetButton.vue'
@@ -118,6 +137,10 @@ const systemLogs = ref([])
 // Polling timers
 let pollTimer = null
 let graphPollTimer = null
+
+// Resume banner state
+const resumeBanner = ref(null) // null | { sim }
+const resumeBannerDismissed = ref(false)
 
 // --- Computed Layout Styles ---
 const leftPanelStyle = computed(() => {
@@ -245,7 +268,7 @@ const loadProject = async () => {
       projectData.value = res.data
       updatePhaseByStatus(res.data.status)
       addLog(`Project loaded. Status: ${res.data.status}`)
-      
+
       if (res.data.status === 'ontology_generated' && !res.data.graph_id) {
         await startBuildGraph()
       } else if (res.data.status === 'graph_building' && res.data.graph_build_task_id) {
@@ -255,6 +278,7 @@ const loadProject = async () => {
       } else if (res.data.status === 'graph_completed' && res.data.graph_id) {
         currentPhase.value = 2
         await loadGraph(res.data.graph_id)
+        await checkResumable(res.data)
       }
     } else {
       error.value = res.error
@@ -266,6 +290,31 @@ const loadProject = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const checkResumable = async (project) => {
+  if (!project?.project_id) return
+  try {
+    const res = await getSimulationForProject(project.project_id)
+    if (res.data?.data) {
+      resumeBanner.value = { sim: res.data.data }
+      addLog(`Resume available: simulation ${res.data.data.simulation_id} (${res.data.data.status})`)
+    }
+  } catch (e) {
+    // non-fatal — just don't show the banner
+  }
+}
+
+const dismissResumeBanner = () => {
+  resumeBanner.value = null
+  resumeBannerDismissed.value = true
+}
+
+const resumeToSimulation = () => {
+  const sim = resumeBanner.value?.sim
+  if (!sim) return
+  dismissResumeBanner()
+  router.push({ name: 'Simulation', params: { simulationId: sim.simulation_id } })
 }
 
 const updatePhaseByStatus = (status) => {
@@ -528,6 +577,84 @@ onUnmounted(() => {
 .status-indicator.error .dot { background: #F44336; }
 
 @keyframes pulse { 50% { opacity: 0.5; } }
+
+/* Resume Banner */
+.resume-banner {
+  background: #1A1A1A;
+  color: #FFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 24px;
+  border-bottom: 1px solid #333;
+  z-index: 50;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  flex: 1;
+}
+
+.banner-icon {
+  font-size: 16px;
+  color: #FF5722;
+}
+
+.banner-status {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  background: #333;
+  color: #CCC;
+}
+.banner-status.ready { background: #1B5E20; color: #A5D6A7; }
+.banner-status.completed { background: #0D47A1; color: #90CAF9; }
+.banner-status.running { background: #E65100; color: #FFD54F; }
+
+.banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.banner-btn {
+  border: none;
+  padding: 7px 16px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: opacity 0.2s;
+}
+.banner-btn.primary {
+  background: #FF5722;
+  color: #FFF;
+}
+.banner-btn.ghost {
+  background: transparent;
+  color: #999;
+  border: 1px solid #444;
+}
+.banner-btn:hover { opacity: 0.85; }
+
+.banner-slide-enter-active, .banner-slide-leave-active {
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  overflow: hidden;
+  max-height: 60px;
+}
+.banner-slide-enter-from, .banner-slide-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
 
 /* Content */
 .content-area {

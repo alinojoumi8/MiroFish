@@ -2739,3 +2739,30 @@ def close_simulation_env():
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+@simulation_bp.route('/for-project/<project_id>', methods=['GET'])
+def get_simulation_for_project(project_id):
+    """
+    根据 project_id 返回该项目最近关联的模拟状态。
+    用于前端 resume/recall 功能，判断是否可跳过已完成阶段。
+
+    返回：
+        { "success": true, "data": <simulation state dict | null> }
+    """
+    try:
+        project = ProjectManager.get_project(project_id)
+        if not project:
+            return jsonify({"success": False, "error": t('api.projectNotFound', id=project_id)}), 404
+
+        sim_id = project.last_simulation_id
+        if not sim_id:
+            return jsonify({"success": True, "data": None})
+
+        manager = SimulationManager()
+        state = manager.get_simulation(sim_id)
+        return jsonify({"success": True, "data": state.to_dict() if state else None})
+
+    except Exception as e:
+        logger.error(f"获取项目模拟状态失败: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500

@@ -170,3 +170,11 @@ export const resetAllSimulations = () => {
   return service.post('/api/simulation/reset-all')
 }
 
+/**
+ * 获取项目最近关联的模拟状态（用于 resume/recall）
+ * @param {string} projectId
+ */
+export const getSimulationForProject = (projectId) => {
+  return service.get(`/api/simulation/for-project/${projectId}`)
+}
+

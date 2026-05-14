@@ -19,6 +19,7 @@ from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
 from .memory import get_memory_backend
 from ..utils.locale import t
+from ..models.project import ProjectManager
 
 logger = get_logger('mirofish.simulation')
 
@@ -225,7 +226,16 @@ class SimulationManager:
         
         self._save_simulation_state(state)
         logger.info(f"创建模拟: {simulation_id}, project={project_id}, graph={graph_id}")
-        
+
+        # 记录到项目，供 resume/recall 使用
+        try:
+            project = ProjectManager.get_project(project_id)
+            if project:
+                project.last_simulation_id = simulation_id
+                ProjectManager.save_project(project)
+        except Exception as e:
+            logger.warning(f"更新 last_simulation_id 失败（非致命）: {e}")
+
         return state
     
     def prepare_simulation(

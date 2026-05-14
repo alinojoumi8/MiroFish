@@ -9,6 +9,7 @@
             <span class="step-title">{{ $t('step1.ontologyGeneration') }}</span>
           </div>
           <div class="step-status">
+            <span v-if="phaseTimers.ontology" class="phase-timer" :class="{ frozen: phaseTimers.ontology?.frozen }">{{ fmtTimer('ontology') }}</span>
             <span v-if="currentPhase > 0" class="badge success">{{ $t('step1.ontologyCompleted') }}</span>
             <span v-else-if="currentPhase === 0" class="badge processing">{{ $t('step1.ontologyGenerating') }}</span>
             <span v-else class="badge pending">{{ $t('step1.ontologyPending') }}</span>
@@ -113,6 +114,7 @@
             <span class="step-title">{{ $t('step1.graphRagBuild') }}</span>
           </div>
           <div class="step-status">
+            <span v-if="phaseTimers.build" class="phase-timer" :class="{ frozen: phaseTimers.build?.frozen }">{{ fmtTimer('build') }}</span>
             <span v-if="currentPhase > 1" class="badge success">{{ $t('step1.ontologyCompleted') }}</span>
             <span v-else-if="currentPhase === 1" class="badge processing">{{ buildProgress?.progress || 0 }}%</span>
             <span v-else class="badge pending">{{ $t('step1.ontologyPending') }}</span>
@@ -187,7 +189,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { createSimulation } from '../api/simulation'
@@ -211,6 +213,53 @@ defineEmits(['next-step'])
 const selectedOntologyItem = ref(null)
 const logContent = ref(null)
 const creatingSimulation = ref(false)
+
+// --- Phase timers ---
+const phaseTimers = ref({})
+
+const startTimer = (name) => {
+  if (phaseTimers.value[name]?.intervalId) return
+  const start = Date.now()
+  const id = setInterval(() => {
+    if (phaseTimers.value[name]) {
+      phaseTimers.value[name].elapsed = Math.floor((Date.now() - start) / 1000)
+    }
+  }, 1000)
+  phaseTimers.value[name] = { start, elapsed: 0, frozen: false, intervalId: id }
+}
+
+const stopTimer = (name) => {
+  const t = phaseTimers.value[name]
+  if (t?.intervalId) {
+    clearInterval(t.intervalId)
+    t.intervalId = null
+    t.frozen = true
+  }
+}
+
+const fmtTimer = (name) => {
+  const s = phaseTimers.value[name]?.elapsed ?? 0
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return m > 0 ? `${m}m ${sec}s` : `${sec}s`
+}
+
+// Drive timers from currentPhase prop
+watch(() => props.currentPhase, (phase, prev) => {
+  if (phase === 0 && prev === undefined) startTimer('ontology')
+  if (phase === 0 && prev !== 0) startTimer('ontology')
+  if (phase === 1) {
+    stopTimer('ontology')
+    startTimer('build')
+  }
+  if (phase >= 2) {
+    stopTimer('build')
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  Object.values(phaseTimers.value).forEach(t => { if (t?.intervalId) clearInterval(t.intervalId) })
+})
 
 // 进入环境搭建 - 创建 simulation 并跳转
 const handleEnterEnvSetup = async () => {
@@ -351,6 +400,17 @@ watch(() => props.systemLogs.length, () => {
 .badge.processing { background: #FF5722; color: #FFF; }
 .badge.accent { background: #FF5722; color: #FFF; }
 .badge.pending { background: #F5F5F5; color: #999; }
+
+.phase-timer {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #FF5722;
+  font-weight: 600;
+  margin-right: 8px;
+}
+.phase-timer.frozen {
+  color: #999;
+}
 
 .api-note {
   font-family: 'JetBrains Mono', monospace;
