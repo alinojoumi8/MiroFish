@@ -108,8 +108,8 @@ async function doReset() {
 
 /* Dark navbar variant */
 .reset-btn.dark {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: transparent;
+  border-color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 
